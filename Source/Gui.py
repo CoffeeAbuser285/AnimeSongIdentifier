@@ -115,11 +115,10 @@ class Gui(QWidget, GuiHelper, SignalProcessing):
     # Finding Song
     def FindSong(self):
         while(self.isRunning == True):
-            print("Finding Song!")
             # Run code for Finding Song
             songArray = self.GetSongInformation()
             
             self.SetSongInformation(songArray)
             self.DisplaySongInfo()
             
-            time.sleep(0.5)
+            time.sleep(0.1)

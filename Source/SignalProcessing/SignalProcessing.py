@@ -2,15 +2,18 @@ import hashlib
 import json
 import os
 from scipy.ndimage import maximum_filter
+import scipy.io.wavfile as wav
 import librosa
 import numpy as np
 import matplotlib.pyplot as plt
+import sounddevice as sd
 from .HashDictionary import HashDictionary
 
 SONG_DIRECTORY = "Source/Database/MusicData"
-CLIP_1 = "Source/Database/Clip/Clip1.mp3"
-CLIP_2 = "Source/Database/Clip/Clip2.mp3"
-CLIP_3 = "Source/Database/Clip/Clip3.mp3"
+CLIP_DIRECTORY = "Source/Database/Clip/"
+CLIP = "Source/Database/Clip/clip_audio.wav"
+CLIP_1 = "Source/Database/Clip/clip1.mp3"
+CLIP_2 = "Source/Database/Clip/clip2.mp3"
 
 HASH_FILE = "Source/Database/MusicHashes/hashes.json"
 
@@ -39,7 +42,8 @@ class SignalProcessing(HashDictionary):
     # Grabbing Song Information
     def GetSongInformation(self):
         #TODO: Replace clip with real time audio
-        S_db        = self.LoadAudio(CLIP_2)
+        self.RecordClip()
+        S_db        = self.LoadAudio(CLIP)
         peaks        = self.GetPeaks(S_db)
         fingerprints = self.GenerateHashes(peaks)
         songArray    = self.MatchClip(fingerprints)
@@ -55,9 +59,12 @@ class SignalProcessing(HashDictionary):
                 database[h] = []
             database[h].append((title, t))
     
-    def LoadAudio(self, song):
+    def LoadAudio(self, song, mp3 = False):
         # Load audio
         y, sr = librosa.load(song, sr=22050)
+        
+        # Normalizing Audio
+        y = y / np.max(np.abs(y))
 
         # Compute spectrogram
         # Frames = 22050 (sr) / 512 (hop length)
@@ -67,16 +74,11 @@ class SignalProcessing(HashDictionary):
         return S_db
         
 
-    def GetPeaks(self, S_db, threshold=-20, neighborhood_size=20):
+    def GetPeaks(self, S_db, threshold=-80, neighborhood_size=20):
         # Find local maxima
         local_max = maximum_filter(S_db, size=neighborhood_size) == S_db
         detected_peaks = (S_db > threshold) & local_max
         peak_coords = np.argwhere(detected_peaks)
-        
-        '''
-        for i in peak_coords:
-            print(i)
-        '''
 
         return peak_coords  # (frequency_bin, time_bin)
 
@@ -109,7 +111,20 @@ class SignalProcessing(HashDictionary):
         if matches:
             best_match = max(matches, key=matches.get)
             print(f"Best match: {best_match[0]} (score: {matches[best_match]})")
-            return song_title
+            return best_match[0]
         else:
             print("No match found.")
             return "match not found!"
+        
+    def RecordClip(self):
+        device_index = 2
+        
+        #print(sd.query_devices())
+        samplerate = 44100
+        duration = 5  # seconds
+        
+        recording = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=1,
+                   dtype='int16', device=device_index)
+        sd.wait()
+        #return recording
+        wav.write(CLIP_DIRECTORY + "clip_audio.wav", samplerate, recording)

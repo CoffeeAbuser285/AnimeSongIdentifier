@@ -24,13 +24,7 @@ class HashDictionary():
         hashes = {}
         songArray = ["","","","","",""]
         
-        for h, t in fingerprints:
-            '''
-            if h not in database:
-                database[h] = []
-            database[h].append((songId, t))
-            '''
-            
+        for h, t in fingerprints: 
             if h not in hashes:
                 database[h] = []
             hashes[h].append(t)
