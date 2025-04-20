@@ -1,45 +1,86 @@
 import hashlib
+import json
+import os
 from scipy.ndimage import maximum_filter
 import librosa
 import numpy as np
 import matplotlib.pyplot as plt
+from .HashDictionary import HashDictionary
 
+SONG_DIRECTORY = "Source/Database/MusicData"
+CLIP_1 = "Source/Database/Clip/Clip1.mp3"
+CLIP_2 = "Source/Database/Clip/Clip2.mp3"
+CLIP_3 = "Source/Database/Clip/Clip3.mp3"
 
-class SignalProcessing():
-    def __init__(self): 
-        pass
+HASH_FILE = "Source/Database/MusicHashes/hashes.json"
 
-    def FindHash():
-        pass
+database = {}
+
+class SignalProcessing(HashDictionary):
+    
+    # Populate Hash File with songs from folder
+    def PopulateHashFile(self):
+        mp3Files = []
+        titles = []
         
-    def LoadAudio():
+        # Finding all songs in folder
+        for filename in os.listdir(SONG_DIRECTORY):
+            if filename.lower().endswith(".mp3"):
+                mp3Files.append(os.path.join(SONG_DIRECTORY, filename))
+                titles.append(filename)
+                
+        # Storing songs into database
+        for title, mp3 in zip(titles, mp3Files):
+            S_db         = self.LoadAudio(mp3)
+            peaks        = self.GetPeaks(S_db)
+            fingerprints = self.GenerateHashes(peaks)
+            self.TempStoreSong(title, fingerprints)
+        
+    # Grabbing Song Information
+    def GetSongInformation(self):
+        #TODO: Replace clip with real time audio
+        S_db        = self.LoadAudio(CLIP_2)
+        peaks        = self.GetPeaks(S_db)
+        fingerprints = self.GenerateHashes(peaks)
+        songArray    = self.MatchClip(fingerprints)
+        
+        print(f"Found {len(peaks)} peaks.")
+        print(f"Generated {len(fingerprints)} hashes.")
+        
+        return [songArray, "", "", "", "", "", ""]
+        
+    def TempStoreSong(self, title, fingerprints):
+        for h, t in fingerprints:
+            if h not in database:
+                database[h] = []
+            database[h].append((title, t))
+    
+    def LoadAudio(self, song):
         # Load audio
-        y, sr = librosa.load("tokyo_ghoul_unravel.mp3", sr=22050)
+        y, sr = librosa.load(song, sr=22050)
 
         # Compute spectrogram
+        # Frames = 22050 (sr) / 512 (hop length)
         S = np.abs(librosa.stft(y, n_fft=2048, hop_length=512))
-        S_db = librosa.amplitude_to_db(S, ref=np.max)
+        S_db= librosa.amplitude_to_db(S, ref=np.max)
 
-        # Show spectrogram
-        plt.figure(figsize=(10, 4))
-        librosa.display.specshow(S_db, sr=sr, x_axis='time', y_axis='log')
-        plt.colorbar()
-        plt.title('Spectrogram (dB)')
-        plt.tight_layout()
-        plt.show()
+        return S_db
+        
 
-    def get_peaks(S_db, threshold=10, neighborhood_size=20):
+    def GetPeaks(self, S_db, threshold=-20, neighborhood_size=20):
         # Find local maxima
         local_max = maximum_filter(S_db, size=neighborhood_size) == S_db
         detected_peaks = (S_db > threshold) & local_max
         peak_coords = np.argwhere(detected_peaks)
+        
+        '''
+        for i in peak_coords:
+            print(i)
+        '''
 
         return peak_coords  # (frequency_bin, time_bin)
 
-    peaks = get_peaks(S_db)
-    print(f"Found {len(peaks)} peaks.")
-
-    def generate_hashes(peaks, fan_value=5):
+    def GenerateHashes(self, peaks, fan_value=5):
         hashes = []
         for i in range(len(peaks)):
             for j in range(1, fan_value):
@@ -56,40 +97,19 @@ class SignalProcessing():
                         hashes.append((h, time1))
         return hashes
 
-    fingerprints = generate_hashes(peaks)
-    print(f"Generated {len(fingerprints)} hashes.")
-
-
-    db = {}  # Simulated database
-
-    # Store: song title → hashes
-    def store_song(title, fingerprints):
-        for h, t in fingerprints:
-            if h not in db:
-                db[h] = []
-            db[h].append((title, t))
-
-    store_song("tokyo_ghoul_unravel", fingerprints)
-
-    def match_clip(fingerprints):
+    def MatchClip(self, fingerprints):
         matches = {}
         for h, t in fingerprints:
-            if h in db:
-                for song_title, song_time in db[h]:
+            #TODO: match with the json
+            if h in database:
+                for song_title, song_time in database[h]:
                     delta = song_time - t
                     matches[(song_title, delta)] = matches.get((song_title, delta), 0) + 1
 
         if matches:
             best_match = max(matches, key=matches.get)
             print(f"Best match: {best_match[0]} (score: {matches[best_match]})")
+            return song_title
         else:
             print("No match found.")
-
-    # Load a short clip and repeat the process
-    y_clip, _ = librosa.load("clip.wav", sr=22050)
-    S_clip = np.abs(librosa.stft(y_clip, n_fft=2048, hop_length=512))
-    S_db_clip = librosa.amplitude_to_db(S_clip, ref=np.max)
-    peaks_clip = get_peaks(S_db_clip)
-    fp_clip = generate_hashes(peaks_clip)
-
-    match_clip(fp_clip)
+            return "match not found!"

@@ -3,3 +3,4 @@ __all__ = ["SignalProcessing"]
 
 # Import the submodules
 from .SignalProcessing import SignalProcessing
+from .SignalProcessing import HashDictionary
